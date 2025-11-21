@@ -1,12 +1,15 @@
 package cache
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/go-redis/redis"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type demoEntity struct {
@@ -124,6 +127,82 @@ func TestExpirationExpiresL1Entry(t *testing.T) {
 	if loadCount != 2 {
 		t.Fatalf("expected loader to run twice due to expiration, got %d", loadCount)
 	}
+}
+
+func TestWithGormLoaderBackfillsFromDB(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+
+	if err := db.AutoMigrate(&gormEntity{}); err != nil {
+		t.Fatalf("failed to migrate: %v", err)
+	}
+
+	expected := gormEntity{ID: 7, Name: "from-db"}
+	if err := db.Create(&expected).Error; err != nil {
+		t.Fatalf("failed to seed: %v", err)
+	}
+
+	cache := NewMultiLevelCache(nil, WithGormLoader(&gormFetcher{db: db}))
+
+	entity := &gormEntity{ID: 7}
+	if err := cache.Get(entity); err != nil {
+		t.Fatalf("unexpected error loading from db: %v", err)
+	}
+	if entity.Name != expected.Name {
+		t.Fatalf("expected %q, got %q", expected.Name, entity.Name)
+	}
+
+	// Ensure subsequent reads are served from cache even if the database changes.
+	if err := db.Model(&gormEntity{ID: 7}).Update("name", "mutated").Error; err != nil {
+		t.Fatalf("failed to mutate db: %v", err)
+	}
+
+	entity2 := &gormEntity{ID: 7}
+	if err := cache.Get(entity2); err != nil {
+		t.Fatalf("unexpected error on cached read: %v", err)
+	}
+	if entity2.Name != expected.Name {
+		t.Fatalf("expected cached value %q, got %q", expected.Name, entity2.Name)
+	}
+}
+
+func TestWithGormLoaderReturnsError(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&gormEntity{}); err != nil {
+		t.Fatalf("failed to migrate: %v", err)
+	}
+
+	cache := NewMultiLevelCache(nil, WithGormLoader(&gormFetcher{db: db}))
+	missing := &gormEntity{ID: 404}
+	err = cache.Get(missing)
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("expected ErrRecordNotFound, got %v", err)
+	}
+}
+
+type gormEntity struct {
+	ID   int `gorm:"primaryKey"`
+	Name string
+}
+
+func (g *gormEntity) Identity() string { return fmt.Sprint(g.ID) }
+
+type gormFetcher struct {
+	db *gorm.DB
+}
+
+func (g *gormFetcher) FetchOnlyDB(out interface{}) error {
+	holder, ok := out.(**gorm.DB)
+	if !ok {
+		return fmt.Errorf("unexpected db holder type %T", out)
+	}
+	*holder = g.db
+	return nil
 }
 
 type fakeRedis struct {
