@@ -11,16 +11,17 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/iris-contrib/go.uuid v2.0.0+incompatible
 	github.com/kataras/golog v0.1.7
-	github.com/prometheus/client_golang v1.13.0
-	github.com/spf13/cobra v1.5.0
-	go.uber.org/ratelimit v0.2.0
-	golang.org/x/crypto v0.36.0 // indirect
-	golang.org/x/net v0.38.0
-	golang.org/x/sync v0.12.0
-	gopkg.in/go-playground/validator.v9 v9.31.0
-	gopkg.in/yaml.v3 v3.0.1
-	gorm.io/driver/mysql v1.5.7
-	gorm.io/gorm v1.25.12
+        github.com/prometheus/client_golang v1.13.0
+        github.com/spf13/cobra v1.5.0
+        go.uber.org/ratelimit v0.2.0
+        golang.org/x/crypto v0.36.0 // indirect
+        golang.org/x/net v0.38.0
+        golang.org/x/sync v0.12.0
+        gopkg.in/go-playground/validator.v9 v9.31.0
+        gopkg.in/yaml.v3 v3.0.1
+        gorm.io/driver/mysql v1.5.7
+        gorm.io/driver/sqlite v1.5.7
+        gorm.io/gorm v1.25.12
 )
 
 require (
